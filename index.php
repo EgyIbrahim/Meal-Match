@@ -1,19 +1,7 @@
 <?php
-session_start(); // Start the session to store user data
+include('config.php');
+include('includes/header.php');
 
-// Database connection
-$servername = "localhost"; // Your server name (usually localhost)
-$username = "root";        // Your database username
-$password = "";            // Your database password
-$dbname = "meal_match";    // Your database name
-
-// Create connection
-$conn = new mysqli($servername, $username, $password, $dbname);
-
-// Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
-}
 
 // Check if the form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
@@ -50,34 +38,18 @@ $conn->close();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meal Match Login</title>
-    <link rel="stylesheet" href="style.css"> <!-- Optional: You can add your custom styles -->
+    <title>Meal Match - Home</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
+<body class="bg-gray-100 text-gray-900">
 
-    <div class="login-container">
-        <h2>Login to Meal Match</h2>
+    <main class="max-w-6xl mx-auto p-6 text-center">
+        <h2 class="text-4xl font-extrabold text-gray-800">Welcome to Meal Match!</h2>
+        <p class="text-lg text-gray-600 mt-2">Your ultimate destination for delicious recipes and meal inspiration.</p>
+        <a href="recipes.php" class="mt-4 inline-block bg-blue-500 text-white font-semibold px-6 py-3 rounded-lg hover:bg-blue-600 transition">Explore Recipes</a>
+    </main>
 
-        <?php if (isset($error)): ?>
-            <div class="error-message">
-                <?php echo $error; ?>
-            </div>
-        <?php endif; ?>
-
-        <form action="login.php" method="POST">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" required>
-            </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" required>
-            </div>
-            <button type="submit">Login</button>
-        </form>
-
-        <p>Don't have an account? <a href="register.php">Register here</a></p>
-    </div>
-
+    <?php include('includes/footer.php'); ?>
 </body>
 </html>
+
