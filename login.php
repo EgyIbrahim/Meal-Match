@@ -1,4 +1,5 @@
 <?php
+session_start();
 include('config.php');
 include('includes/header.php');
 error_reporting(E_ALL);
@@ -40,16 +41,9 @@ $conn->close();
 
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meal Match - Login</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-
-</head>
 <body>
 
-<div class="min-h-screen flex items-center justify-center bg-gray-100">
+
     <div class="bg-white p-8 rounded-lg shadow-md w-96">
         <h2 class="text-2xl font-bold text-center mb-4">Login to Meal Match</h2>
         <form action="login.php" method="POST">
@@ -65,7 +59,7 @@ $conn->close();
         </form>
         <p class="text-center text-gray-600 mt-4">Don't have an account? <a href="signup.php" class="text-blue-500">Register here</a></p>
     </div>
-</div>
+
 
 <?php include('includes/footer.php'); ?>
 </body>

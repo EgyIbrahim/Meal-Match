@@ -23,13 +23,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($stmt->num_rows > 0) {
             $error = "Username or email already exists";
         } else {
+            // Hash the password
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            
+            // Insert user into database
             $insert_stmt = $conn->prepare("INSERT INTO users (username, email, password) VALUES (?, ?, ?)");
             $insert_stmt->bind_param("sss", $username, $email, $hashed_password);
             
             if ($insert_stmt->execute()) {
+                // Retrieve the newly inserted user ID
+                $user_id = $insert_stmt->insert_id;
+
+                // Store user details in session
+                $_SESSION['user_id'] = $user_id;
                 $_SESSION['username'] = $username;
-                header("Location: welcome.php");
+
+                // Redirect to home page
+                header("Location: index.php");
                 exit;
             } else {
                 $error = "Error creating account. Please try again.";
