@@ -1,93 +1,80 @@
 <?php
-// Start the session
 session_start();
 
-// Include the database configuration
-include('config.php');
-// Check if the recipe ID is provided in the URL
+// Validate the recipe ID parameter
 if (!isset($_GET['id']) || !is_numeric($_GET['id'])) {
-    header("Location: recipes.php"); // Redirect if no ID is provided
+    header("Location: recipes.php");
     exit();
 }
 
-// Get the recipe ID from the URL
 $recipeId = (int)$_GET['id'];
 
-// Fetch the recipe details from the database
-$sql = "SELECT 
-            r.*, 
-            u.username AS author, 
-            GROUP_CONCAT(c.name SEPARATOR ', ') AS categories
-        FROM recipes r
-        LEFT JOIN users u ON r.user_id = u.id
-        LEFT JOIN recipe_category rc ON r.id = rc.recipe_id
-        LEFT JOIN categories c ON rc.category_id = c.id
-        WHERE r.id = ?
-        GROUP BY r.id";
-$stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $recipeId);
-$stmt->execute();
-$result = $stmt->get_result();
+// Build the API URL to look up full meal details by ID
+$apiUrl = "https://www.themealdb.com/api/json/v1/1/lookup.php?i=" . $recipeId;
 
-// Check if the recipe exists
-if ($result->num_rows === 0) {
-    header("Location: recipes.php"); // Redirect if recipe doesn't exist
+// Fetch the API response
+$response = @file_get_contents($apiUrl);
+if ($response === FALSE) {
+    header("Location: recipes.php");
     exit();
 }
 
-// Fetch the recipe data
-$recipe = $result->fetch_assoc();
+$data = json_decode($response, true);
 
-// Set the page title dynamically
-$pageTitle = $recipe['title'] . " - Meal Match";
+// Verify the API returned a valid meal
+if (!isset($data['meals']) || count($data['meals']) === 0) {
+    header("Location: recipes.php");
+    exit();
+}
+
+// Get the meal details
+$meal = $data['meals'][0];
+
+// Set the page title dynamically using the meal name
+$pageTitle = $meal['strMeal'] . " - Meal Match";
 
 // Include the header
 include('includes/header.php');
 ?>
+  
+<main class="max-w-4xl mx-auto p-6">
+    <!-- Recipe Image -->
+    <img src="<?= htmlspecialchars($meal['strMealThumb']) ?>" 
+         alt="<?= htmlspecialchars($meal['strMeal']) ?>" 
+         class="w-full h-64 object-cover rounded-lg mb-6">
 
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><?= htmlspecialchars($pageTitle) ?></title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 text-gray-900">
-    <main class="max-w-4xl mx-auto p-6">
-        <!-- Recipe Image -->
-        <img src="<?= htmlspecialchars($recipe['image']) ?>" 
-             alt="<?= htmlspecialchars($recipe['title']) ?>" 
-             class="w-full h-64 object-cover rounded-lg mb-6">
+    <!-- Recipe Title -->
+    <h1 class="text-4xl font-bold mb-4"><?= htmlspecialchars($meal['strMeal']) ?></h1>
 
-        <!-- Recipe Title -->
-        <h1 class="text-4xl font-bold mb-4"><?= htmlspecialchars($recipe['title']) ?></h1>
+    <!-- Recipe Metadata -->
+    <div class="mb-6 text-gray-600">
+        <span class="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded">
+            <?= htmlspecialchars($meal['strCategory']) ?> | <?= htmlspecialchars($meal['strArea']) ?>
+        </span>
+    </div>
 
-        <!-- Recipe Metadata -->
-        <div class="mb-6 text-gray-600">
-            <span class="bg-blue-100 text-blue-800 text-sm font-medium px-2.5 py-0.5 rounded">
-                <?= htmlspecialchars($recipe['categories']) ?>
-            </span>
-            <div class="mt-2">
-                Posted by <span class="font-semibold"><?= htmlspecialchars($recipe['author']) ?></span> on 
-                <?= date('F j, Y', strtotime($recipe['created_at'])) ?>
-            </div>
-        </div>
+    <!-- Ingredients -->
+    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+        <h2 class="text-2xl font-semibold mb-4">Ingredients</h2>
+        <ul class="list-disc ml-6">
+            <?php 
+            // Loop through possible ingredient and measure fields (up to 20)
+            for ($i = 1; $i <= 20; $i++) {
+                $ingredient = $meal['strIngredient' . $i];
+                $measure = $meal['strMeasure' . $i];
+                if (!empty($ingredient) && trim($ingredient) !== '') {
+                    echo "<li>" . htmlspecialchars($ingredient) . " - " . htmlspecialchars($measure) . "</li>";
+                }
+            }
+            ?>
+        </ul>
+    </div>
 
-        <!-- Ingredients -->
-        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
-            <h2 class="text-2xl font-semibold mb-4">Ingredients</h2>
-            <div class="whitespace-pre-wrap"><?= htmlspecialchars($recipe['ingredients']) ?></div>
-        </div>
+    <!-- Instructions -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-2xl font-semibold mb-4">Instructions</h2>
+        <div class="whitespace-pre-wrap"><?= nl2br(htmlspecialchars($meal['strInstructions'])) ?></div>
+    </div>
+</main>
 
-        <!-- Steps -->
-        <div class="bg-white p-6 rounded-lg shadow-md">
-            <h2 class="text-2xl font-semibold mb-4">Instructions</h2>
-            <div class="whitespace-pre-wrap"><?= htmlspecialchars($recipe['steps']) ?></div>
-        </div>
-    </main>
-
-    <!-- Include the footer -->
-    <?php include('includes/footer.php'); ?>
-</body>
-</html>
+<?php include('includes/footer.php'); ?>
