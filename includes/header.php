@@ -1,4 +1,15 @@
-<?php session_start(); ?>
+<?php session_start(); 
+// Fetch filter options from API and cache in session
+if (!isset($_SESSION['categories'])) {
+    $categories = json_decode(file_get_contents('https://www.themealdb.com/api/json/v1/1/list.php?c=list'), true);
+    $_SESSION['categories'] = $categories['meals'];
+}
+
+if (!isset($_SESSION['areas'])) {
+    $areas = json_decode(file_get_contents('https://www.themealdb.com/api/json/v1/1/list.php?a=list'), true);
+    $_SESSION['areas'] = $areas['meals'];
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -11,7 +22,7 @@
         }
     </script>
 </head>
-<body class="bg-cover bg-center" style="background-image: url('https://images.pexels.com/photos/616360/pexels-photo-616360.jpeg');">
+<body class="bg-[#F8EDEB]"> 
     
 <header class="bg-[#FAF3E0] shadow-md">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -31,14 +42,38 @@
                 </nav>
             </div>
 
-            <!-- Search Bar -->
-            <form action="search.php" method="GET" class="hidden md:flex relative">
-                <input type="text" name="query" placeholder="Search recipes..." class="w-60 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
-                <button type="submit" class="absolute right-3 top-2.5">
-                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                    </svg>
-                </button>
+            <!-- Search Bar with Filters -->
+            <form action="search.php" method="GET" class="hidden md:flex items-center gap-2">
+                <!-- Search Input -->
+                <div class="relative">
+                    <input type="text" name="query" placeholder="Search recipes..." 
+                           class="w-48 px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500">
+                    <button type="submit" class="absolute right-3 top-2.5">
+                        <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Category Filter Dropdown -->
+                <select name="category" class="px-2 py-2 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Categories</option>
+                    <?php foreach ($_SESSION['categories'] as $cat): ?>
+                        <option value="<?= htmlspecialchars($cat['strCategory']) ?>">
+                            <?= htmlspecialchars($cat['strCategory']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+
+                <!-- Area/Region Filter Dropdown -->
+                <select name="area" class="px-2 py-2 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-500">
+                    <option value="">All Regions</option>
+                    <?php foreach ($_SESSION['areas'] as $area): ?>
+                        <option value="<?= htmlspecialchars($area['strArea']) ?>">
+                            <?= htmlspecialchars($area['strArea']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </form>
 
             <!-- Account Menu -->

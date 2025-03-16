@@ -121,7 +121,7 @@ function getCommunityPosts($conn, $per_page, $page, $offset) {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <!-- Existing head content -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body class="bg-gray-100">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -145,17 +145,21 @@ function getCommunityPosts($conn, $per_page, $page, $offset) {
             <!-- Posts List -->
             <div class="space-y-6">
                 <?php foreach ($posts as $post): ?>
-                    <div class="border rounded-lg p-4 hover:shadow-md transition">
-                        <!-- Post Header -->
-                        <div class="flex items-center mb-4">
-                            <img src="<?= htmlspecialchars($post['profile_picture']) ?>" 
-                                 class="w-12 h-12 rounded-full mr-3" 
-                                 alt="<?= htmlspecialchars($post['username']) ?>'s profile picture">
-                            <div>
-                                <h3 class="text-xl font-semibold"><?= htmlspecialchars($post['title']) ?></h3>
-                                <p class="text-gray-600"><?= htmlspecialchars($post['username']) ?></p>
-                            </div>
+                <div class="flex items-center mb-4">
+                    <?php if (!empty($post['profile_picture']) && file_exists($post['profile_picture'])): ?>
+                        <img src="<?= htmlspecialchars($post['profile_picture']) ?>" 
+                            class="w-12 h-12 rounded-full mr-3" 
+                            alt="Profile picture">
+                    <?php else: ?>
+                        <div class="w-12 h-12 rounded-full mr-3 bg-gray-300 flex items-center justify-center">
+                            <i class="fas fa-user text-gray-600 text-2xl"></i>
                         </div>
+                    <?php endif; ?>
+                    <div>
+                        <h3 class="text-xl font-semibold"><?= htmlspecialchars($post['title']) ?></h3>
+                        <p class="text-gray-600"><?= htmlspecialchars($post['username']) ?></p>
+                    </div>
+                </div>
 
                         <!-- Post Content -->
                         <?php if ($post['image_url']): ?>
@@ -167,19 +171,28 @@ function getCommunityPosts($conn, $per_page, $page, $offset) {
 
                         <!-- Interaction Buttons -->
                         <div class="flex items-center justify-between border-t pt-4">
-                            <div class="flex items-center space-x-4">
-                                <form method="POST">
-                                    <input type="hidden" name="post_id" value="<?= $post['id'] ?>">
-                                    <button type="submit" name="like_post" 
-                                            class="flex items-center text-red-500 hover:text-red-600">
-                                        ❤️ <?= $post['likes_count'] ?> Likes
-                                    </button>
-                                </form>
-                                
-                                <span class="text-blue-500">
-                                    💬 <?= $post['comments_count'] ?> Comments
-                                </span>
-                            </div>
+                        <div class="flex items-center space-x-4">
+    <button onclick="likePost(<?= $post['id'] ?>)" 
+            class="flex items-center text-red-500 hover:text-red-600">
+        ❤️ <span id="likes-count-<?= $post['id'] ?>"><?= $post['likes_count'] ?></span> Likes
+    </button>
+    <span class="text-blue-500">
+        💬 <span id="comments-count-<?= $post['id'] ?>"><?= $post['comments_count'] ?></span> Comments
+    </span>
+</div>
+<form onsubmit="addComment(event, <?= $post['id'] ?>)">
+    <input type="hidden" name="post_id" value="<?= $post['id'] ?>">
+    <div class="flex gap-2">
+        <input type="text" name="comment_content" 
+               class="flex-1 border rounded-lg p-2" 
+               placeholder="Write a comment...">
+        <button type="submit" 
+                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
+            Post
+        </button>
+    </div>
+</form>
+
                             <span class="text-sm text-gray-500">
                                 <?= date('M j, Y g:i A', strtotime($post['created_at'])) ?>
                             </span>
@@ -234,7 +247,66 @@ function getCommunityPosts($conn, $per_page, $page, $offset) {
             </div>
         </div>
     </div>
+    <script>
+// Global like function
+async function likePost(postId) {
+    try {
+        const response = await fetch('like_post.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `post_id=${postId}`
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            const likesElement = document.querySelector(`#likes-count-${postId}`);
+            likesElement.textContent = data.new_count;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+// Global comment function
+async function addComment(event, postId) {
+    event.preventDefault();
+    const formData = new FormData(event.target);
     
+    try {
+        const response = await fetch('add_comment.php', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            // Update comments count
+            const countElement = document.querySelector(`#comments-count-${postId}`);
+            countElement.textContent = data.new_count;
+            
+            // Clear input
+            event.target.comment_content.value = '';
+            
+            // Add new comment to list
+            const commentsSection = event.target.closest('.comments-section').querySelector('.comments-list');
+            const newComment = document.createElement('div');
+            newComment.className = 'mb-3';
+            newComment.innerHTML = `
+                <div class="flex items-center mb-2">
+                    ${data.avatar}
+                    <span class="font-medium">${data.username}</span>
+                </div>
+                <p class="text-gray-700 ml-4">${data.content}</p>
+            `;
+            commentsSection.prepend(newComment);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+</script>
     <?php include('includes/footer.php'); ?>
 </body>
 </html>

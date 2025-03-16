@@ -2,8 +2,7 @@
 session_start();
 include('config.php');
 include('includes/header.php');
-error_reporting(E_ALL);
-ini_set('display_errors', 1);
+    
 // Handle form submission
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $username = $_POST['username'];
