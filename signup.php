@@ -26,7 +26,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             // Hash the password
             $hashed_password = password_hash($password, PASSWORD_DEFAULT);
             
-            // Insert user into database - fixed column name to match schema
+            // Insert user into database
             $insert_stmt = $conn->prepare("INSERT INTO users (username, email, password_hash) VALUES (?, ?, ?)");
             $insert_stmt->bind_param("sss", $username, $email, $hashed_password);
             

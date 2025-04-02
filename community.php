@@ -3,310 +3,143 @@ session_start();
 require 'config.php';
 include('includes/header.php');
 
-// Handle interactions
-handlePostActions();
-handleLikeActions();
-handleCommentActions();
-
 // Pagination setup
 $posts_per_page = 10;
-$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+$page = isset($_GET['page']) ? max(1, (int)$_GET['page']) : 1;
 $offset = ($page - 1) * $posts_per_page;
 
-// Get community posts
-list($posts, $total_pages) = getCommunityPosts($conn, $posts_per_page, $page, $offset);
+// Get community posts without likes/comments columns
+list($posts, $total_pages) = getCommunityPosts($conn, $posts_per_page, $offset);
 
-function handlePostActions() {
-    global $conn;
-    if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_SESSION['user_id'])) {
-        if (isset($_POST['post_submit'])) {
-            // Handle new post submission
-            $title = trim($_POST['post_title']);
-            $content = trim($_POST['post_content']);
-            $image_url = handleImageUpload();
-
-            if (!empty($title) && !empty($content)) {
-                $stmt = $conn->prepare("INSERT INTO community_posts (user_id, title, content, image_url) VALUES (?, ?, ?, ?)");
-                $stmt->bind_param("isss", $_SESSION['user_id'], $title, $content, $image_url);
-                $stmt->execute();
-                header("Location: community.php?page=1");
-                exit;
-            }
+function getCommunityPosts($conn, $per_page, $offset) {
+    try {
+        // Count total posts for pagination
+        $count_result = $conn->query("SELECT COUNT(*) as total FROM community_posts");
+        if (!$count_result) {
+            throw new Exception("Count query failed: " . $conn->error);
         }
-    }
-}
+        $total_data = $count_result->fetch_assoc();
+        $total_posts = $total_data['total'];
+        $total_pages = ceil($total_posts / $per_page);
 
-function handleLikeActions() {
-    global $conn;
-    if (isset($_POST['like_post']) && isset($_SESSION['user_id'])) {
-        $post_id = (int)$_POST['post_id'];
-        $user_id = (int)$_SESSION['user_id'];
+        // Get paginated posts
+        $stmt = $conn->prepare("
+            SELECT id, title, content, image_url, created_at
+            FROM community_posts
+            ORDER BY created_at DESC
+            LIMIT ? OFFSET ?
+        ");
+        if (!$stmt) {
+            throw new Exception("Prepare failed: " . $conn->error);
+        }
+        $stmt->bind_param("ii", $per_page, $offset);
+        if (!$stmt->execute()) {
+            throw new Exception("Execute failed: " . $stmt->error);
+        }
+        $result = $stmt->get_result();
+        $posts = $result->fetch_all(MYSQLI_ASSOC);
+        return [$posts, $total_pages];
         
-        // Check if already liked
-        $check = $conn->prepare("SELECT id FROM likes WHERE post_id = ? AND user_id = ?");
-        $check->bind_param("ii", $post_id, $user_id);
-        $check->execute();
-        
-        if ($check->get_result()->num_rows == 0) {
-            // Add like
-            $insert = $conn->prepare("INSERT INTO likes (post_id, user_id) VALUES (?, ?)");
-            $insert->bind_param("ii", $post_id, $user_id);
-            $insert->execute();
-            
-            // Update likes count
-            $update = $conn->prepare("UPDATE community_posts SET likes_count = likes_count + 1 WHERE id = ?");
-            $update->bind_param("i", $post_id);
-            $update->execute();
-        }
-        header("Location: ".$_SERVER['HTTP_REFERER']);
-        exit;
+    } catch (Exception $e) {
+        error_log($e->getMessage());
+        return [[], 1]; // Return empty posts array and safe total pages
     }
-}
-
-function handleCommentActions() {
-    global $conn;
-    if (isset($_POST['add_comment']) && isset($_SESSION['user_id'])) {
-        $post_id = (int)$_POST['post_id'];
-        $content = trim($_POST['comment_content']);
-        
-        if (!empty($content)) {
-            $stmt = $conn->prepare("INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)");
-            $stmt->bind_param("iis", $post_id, $_SESSION['user_id'], $content);
-            $stmt->execute();
-            
-            // Update comments count
-            $update = $conn->prepare("UPDATE community_posts SET comments_count = comments_count + 1 WHERE id = ?");
-            $update->bind_param("i", $post_id);
-            $update->execute();
-        }
-        header("Location: ".$_SERVER['HTTP_REFERER']);
-        exit;
-    }
-}
-
-function handleImageUpload() {
-    if (!empty($_FILES['post_image']['name'])) {
-        $target_dir = "uploads/";
-        $target_file = $target_dir . basename($_FILES["post_image"]["name"]);
-        if (move_uploaded_file($_FILES["post_image"]["tmp_name"], $target_file)) {
-            return $target_file;
-        }
-    }
-    return null;
-}
-
-function getCommunityPosts($conn, $per_page, $page, $offset) {
-    // Get total posts
-    $count_result = $conn->query("SELECT COUNT(*) as total FROM community_posts");
-    $total_posts = $count_result->fetch_assoc()['total'];
-    $total_pages = ceil($total_posts / $per_page);
-
-    // Get paginated posts
-    $stmt = $conn->prepare("
-        SELECT cp.*, u.username, u.profile_picture,
-            (SELECT COUNT(*) FROM likes WHERE post_id = cp.id) AS likes_count
-        FROM community_posts cp
-        JOIN users u ON cp.user_id = u.id
-        ORDER BY cp.created_at DESC
-        LIMIT ? OFFSET ?
-    ");
-    $stmt->bind_param("ii", $per_page, $offset);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    return [$result->fetch_all(MYSQLI_ASSOC), $total_pages];
 }
 ?>
 
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Using your existing CSS/JS includes -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Ensure posts' images have a uniform aspect ratio */
+        .post-image {
+            width: 100%;
+            height: 300px; /* Fixed height for consistent aspect ratio */
+            object-fit: cover;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        /* Adjust layout for user info and title */
+        .post-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .post-header .user-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: #e5e7eb; /* Tailwind's gray-300 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 1rem;
+        }
+
+        .post-header .user-name {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #374151; /* Tailwind's gray-700 */
+        }
+
+        .post-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1f2937; /* Tailwind's gray-800 */
+            margin-bottom: 1rem;
+        }
+    </style>
 </head>
 <body class="bg-gray-100">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div class="bg-white rounded-lg shadow-md p-6 mb-8">
             <h1 class="text-3xl font-bold text-center mb-6">Community Posts</h1>
 
-            <!-- New Post Form (existing with image upload added) -->
-            <?php if(isset($_SESSION['user_id'])): ?>
-                <div class="mb-8 bg-gray-50 p-6 rounded-lg">
-                    <form action="community.php" method="POST" enctype="multipart/form-data">
-                        <!-- Existing form fields -->
-                        <div class="mb-4">
-                            <label for="post_image" class="block text-gray-700 mb-2">Upload Image</label>
-                            <input type="file" name="post_image" id="post_image" class="w-full px-3 py-2 border rounded-lg">
-                        </div>
-                        <!-- Rest of form -->
-                    </form>
-                </div>
-            <?php endif; ?>
-
             <!-- Posts List -->
             <div class="space-y-6">
                 <?php foreach ($posts as $post): ?>
-                <div class="flex items-center mb-4">
-                    <?php if (!empty($post['profile_picture']) && file_exists($post['profile_picture'])): ?>
-                        <img src="<?= htmlspecialchars($post['profile_picture']) ?>" 
-                            class="w-12 h-12 rounded-full mr-3" 
-                            alt="Profile picture">
-                    <?php else: ?>
-                        <div class="w-12 h-12 rounded-full mr-3 bg-gray-300 flex items-center justify-center">
-                            <i class="fas fa-user text-gray-600 text-2xl"></i>
+                    <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
+                        <!-- Post Header -->
+                        <div class="post-header">
+                            <div class="user-icon">
+                                <i class="fas fa-user text-gray-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <div class="user-name">Anonymous User</div>
+                                <div class="post-title"><?= htmlspecialchars($post['title']) ?></div>
+                            </div>
                         </div>
-                    <?php endif; ?>
-                    <div>
-                        <h3 class="text-xl font-semibold"><?= htmlspecialchars($post['title']) ?></h3>
-                        <p class="text-gray-600"><?= htmlspecialchars($post['username']) ?></p>
-                    </div>
-                </div>
+
+                        <!-- Post Image -->
+                        <?php if ($post['image_url']): ?>
+                            <img src="<?= htmlspecialchars($post['image_url']) ?>" class="post-image" alt="Post image">
+                        <?php endif; ?>
 
                         <!-- Post Content -->
-                        <?php if ($post['image_url']): ?>
-                            <img src="<?= htmlspecialchars($post['image_url']) ?>" 
-                                 class="mb-4 rounded-lg max-w-full h-auto" 
-                                 alt="Post image">
-                        <?php endif; ?>
                         <p class="text-gray-800 mb-4"><?= nl2br(htmlspecialchars($post['content'])) ?></p>
 
-                        <!-- Interaction Buttons -->
-                        <div class="flex items-center justify-between border-t pt-4">
-                        <div class="flex items-center space-x-4">
-    <button onclick="likePost(<?= $post['id'] ?>)" 
-            class="flex items-center text-red-500 hover:text-red-600">
-        ❤️ <span id="likes-count-<?= $post['id'] ?>"><?= $post['likes_count'] ?></span> Likes
-    </button>
-    <span class="text-blue-500">
-        💬 <span id="comments-count-<?= $post['id'] ?>"><?= $post['comments_count'] ?></span> Comments
-    </span>
-</div>
-<form onsubmit="addComment(event, <?= $post['id'] ?>)">
-    <input type="hidden" name="post_id" value="<?= $post['id'] ?>">
-    <div class="flex gap-2">
-        <input type="text" name="comment_content" 
-               class="flex-1 border rounded-lg p-2" 
-               placeholder="Write a comment...">
-        <button type="submit" 
-                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-            Post
-        </button>
-    </div>
-</form>
-
-                            <span class="text-sm text-gray-500">
-                                <?= date('M j, Y g:i A', strtotime($post['created_at'])) ?>
-                            </span>
-                        </div>
-
-                        <!-- Comments Section -->
-                        <div class="mt-4 pl-4 border-l-2 border-gray-200">
-                            <?php
-                            $comments = $conn->query("
-                                SELECT c.*, u.username, u.profile_picture 
-                                FROM comments c
-                                JOIN users u ON c.user_id = u.id
-                                WHERE post_id = {$post['id']}
-                                ORDER BY created_at DESC
-                                LIMIT 3
-                            ");
-                            ?>
-                            
-                            <?php if ($comments->num_rows > 0): ?>
-                                <?php while ($comment = $comments->fetch_assoc()): ?>
-                                    <div class="mb-3">
-                                        <div class="flex items-center mb-2">
-                                            <img src="<?= htmlspecialchars($comment['profile_picture']) ?>" 
-                                                 class="w-8 h-8 rounded-full mr-2">
-                                            <span class="font-medium"><?= htmlspecialchars($comment['username']) ?></span>
-                                        </div>
-                                        <p class="text-gray-700 ml-4"><?= htmlspecialchars($comment['content']) ?></p>
-                                    </div>
-                                <?php endwhile; ?>
-                            <?php endif; ?>
-
-                            <!-- Add Comment Form -->
-                            <?php if(isset($_SESSION['user_id'])): ?>
-                                <form method="POST" class="mt-4">
-                                    <input type="hidden" name="post_id" value="<?= $post['id'] ?>">
-                                    <div class="flex gap-2">
-                                        <input type="text" name="comment_content" 
-                                               class="flex-1 border rounded-lg p-2" 
-                                               placeholder="Write a comment...">
-                                        <button type="submit" name="add_comment" 
-                                                class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600">
-                                            Post
-                                        </button>
-                                    </div>
-                                </form>
-                            <?php endif; ?>
+                        <!-- Post Date -->
+                        <div class="text-sm text-gray-500">
+                            <?= date('M j, Y g:i A', strtotime($post['created_at'])) ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
-                
-                <!-- Pagination (existing code) -->
+            </div>
+
+            <!-- Pagination -->
+            <div class="mt-8 flex justify-center">
+                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                    <a href="community.php?page=<?= $i ?>" class="px-4 py-2 mx-1 <?= $page == $i ? 'bg-blue-500 text-white' : 'bg-gray-200' ?> rounded-lg">
+                        <?= $i ?>
+                    </a>
+                <?php endfor; ?>
             </div>
         </div>
     </div>
-    <script>
-// Global like function
-async function likePost(postId) {
-    try {
-        const response = await fetch('like_post.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `post_id=${postId}`
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            const likesElement = document.querySelector(`#likes-count-${postId}`);
-            likesElement.textContent = data.new_count;
-        }
-    } catch (error) {
-        console.error('Error:', error);
-    }
-}
-
-// Global comment function
-async function addComment(event, postId) {
-    event.preventDefault();
-    const formData = new FormData(event.target);
-    
-    try {
-        const response = await fetch('add_comment.php', {
-            method: 'POST',
-            body: formData
-        });
-        const data = await response.json();
-
-        if (data.success) {
-            // Update comments count
-            const countElement = document.querySelector(`#comments-count-${postId}`);
-            countElement.textContent = data.new_count;
-            
-            // Clear input
-            event.target.comment_content.value = '';
-            
-            // Add new comment to list
-            const commentsSection = event.target.closest('.comments-section').querySelector('.comments-list');
-            const newComment = document.createElement('div');
-            newComment.className = 'mb-3';
-            newComment.innerHTML = `
-                <div class="flex items-center mb-2">
-                    ${data.avatar}
-                    <span class="font-medium">${data.username}</span>
-                </div>
-                <p class="text-gray-700 ml-4">${data.content}</p>
-            `;
-            commentsSection.prepend(newComment);
-        }
-    } catch (error) {
-        console.error('Error:', error);
-    }
-}
-</script>
     <?php include('includes/footer.php'); ?>
 </body>
 </html>

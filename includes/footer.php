@@ -14,7 +14,6 @@
                     <li><a href="index.php" class="text-gray-600 hover:text-blue-500">Home</a></li>
                     <li><a href="recipes.php" class="text-gray-600 hover:text-blue-500">Recipes</a></li>
                     <li><a href="about.php" class="text-gray-600 hover:text-blue-500">About Us</a></li>
-                    <li><a href="contact.php" class="text-gray-600 hover:text-blue-500">Contact</a></li>
                 </ul>
             </div>
 

@@ -1,11 +1,22 @@
 <?php
 include('includes/header.php');
+require 'config.php'; // Include database connection
 
-// API endpoint for filtering by ingredient (Example: Chicken Breast)
-$api_url = "https://www.themealdb.com/api/json/v1/1/filter.php?i=chicken_breast";
-$response = file_get_contents($api_url);
-$meals = json_decode($response, true);
+// Fetch all recipes from the database
+$sql = "SELECT * FROM recipes";
+$result = $conn->query($sql);
 
+$meals = [];
+if ($result->num_rows > 0) {
+    while ($row = $result->fetch_assoc()) {
+        $meals[] = $row;
+    }
+} else {
+    // Fallback to API if no recipes are found in the database
+    $api_url = "https://www.themealdb.com/api/json/v1/1/filter.php?i=chicken_breast";
+    $response = file_get_contents($api_url);
+    $meals = json_decode($response, true)['meals'];
+}
 ?>
 
 <!DOCTYPE html>
@@ -21,15 +32,15 @@ $meals = json_decode($response, true);
         <h2 class="text-3xl font-bold text-gray-800 text-center">Find a Recipe</h2>
         <p class="text-lg text-gray-600 text-center mt-2">Discover new recipes tailored to your taste.</p>
 
-        <div class="grid md:grid-cols-2 gap-6 mt-6">
-            <?php if (!empty($meals['meals'])): ?>
-                <?php foreach ($meals['meals'] as $meal): ?>
+        <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+            <?php if (!empty($meals)): ?>
+                <?php foreach ($meals as $meal): ?>
                     <div class="bg-white p-6 rounded-lg shadow-md">
-                        <img src="<?= htmlspecialchars($meal['strMealThumb']) ?>" 
-                             alt="<?= htmlspecialchars($meal['strMeal']) ?>" 
+                        <img src="<?= htmlspecialchars($meal['image'] ?? $meal['strMealThumb']) ?>" 
+                             alt="<?= htmlspecialchars($meal['title'] ?? $meal['strMeal']) ?>" 
                              class="w-full h-48 object-cover mb-4 rounded-lg">
-                        <h3 class="text-xl font-semibold"><?= htmlspecialchars($meal['strMeal']) ?></h3>
-                        <a href="recipe.php?id=<?= $meal['idMeal'] ?>" 
+                        <h3 class="text-xl font-semibold"><?= htmlspecialchars($meal['title'] ?? $meal['strMeal']) ?></h3>
+                        <a href="recipe.php?id=<?= htmlspecialchars($meal['id'] ?? $meal['idMeal']) ?>" 
                            class="mt-4 inline-block bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
                             View Recipe
                         </a>
